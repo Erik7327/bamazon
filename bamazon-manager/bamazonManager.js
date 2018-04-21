@@ -56,7 +56,7 @@ function loadManagerOptions(products) {
                     addToInventory(products);
                     break;
                 case "Add New Product":
-                    addNewProduct(products);
+                    promptManagerForNewProduct(products);
                     break;
                 default:
                     console.log("Goodbye!");
@@ -122,7 +122,7 @@ function promptManagerForQuantity(product) {
         });
 }
 
-// Adds the specified quantity to the specified product
+// Updates quantity of selected product
 function addQuantity(product, quantity) {
     connection.query(
         "UPDATE products SET stock_quantity = ? WHERE item_id = ?", [product.stock_quantity + quantity, product.item_id],
@@ -134,47 +134,43 @@ function addQuantity(product, quantity) {
     );
 }
 
-// Gets all departments, then gets the new product info, then inserts the new product into the db
-function addNewProduct() {
-    getDepartments(function(err, departments) {
-        getProductInfo(departments).then(insertNewProduct);
-    });
+// Asks the manager details about the new product
+// Adds new product to the db when complete
+function promptManagerForNewProduct(products) {
+    inquirer
+        .prompt([{
+                type: "input",
+                name: "product_name",
+                message: "What is the name of the product you would like to add?"
+            },
+            {
+                type: "list",
+                name: "department_name",
+                choices: getDepartments(products),
+                message: "Which department does this product fall into?"
+            },
+            {
+                type: "input",
+                name: "price",
+                message: "How much does it cost?",
+                validate: function(val) {
+                    return val > 0;
+                }
+            },
+            {
+                type: "input",
+                name: "quantity",
+                message: "How many do we have?",
+                validate: function(val) {
+                    return !isNaN(val);
+                }
+            }
+        ])
+        .then(addNewProduct);
 }
 
-// Prompts manager for new product info, then adds new product
-function getProductInfo(departments) {
-    return inquirer.prompt([{
-            type: "input",
-            name: "product_name",
-            message: "What is the name of the product you would like to add?"
-        },
-        {
-            type: "list",
-            name: "department_name",
-            choices: getDepartmentNames(departments),
-            message: "Which department does this product fall into?"
-        },
-        {
-            type: "input",
-            name: "price",
-            message: "How much does it cost?",
-            validate: function(val) {
-                return val > 0;
-            }
-        },
-        {
-            type: "input",
-            name: "quantity",
-            message: "How many do we have?",
-            validate: function(val) {
-                return !isNaN(val);
-            }
-        }
-    ]);
-}
-
-// Adds new product to the db
-function insertNewProduct(val) {
+// Adds a new product to the database, loads the manager menu
+function addNewProduct(val) {
     connection.query(
         "INSERT INTO products (product_name, department_name, price, stock_quantity) VALUES (?, ?, ?, ?)", [val.product_name, val.department_name, val.price, val.quantity],
         function(err, res) {
@@ -186,16 +182,15 @@ function insertNewProduct(val) {
     );
 }
 
-// Gets all of the departments and runs a callback function when done
-function getDepartments(cb) {
-    connection.query("SELECT * FROM departments", cb);
-}
-
-// Is passed an array of departments from the db, then returns an array of just the department names
-function getDepartmentNames(departments) {
-    return departments.map(function(department) {
-        return department.department_name;
-    });
+// Take an array of product objects, return an array of their unique departments
+function getDepartments(products) {
+    var departments = [];
+    for (var i = 0; i < products.length; i++) {
+        if (departments.indexOf(products[i].department_name) === -1) {
+            departments.push(products[i].department_name);
+        }
+    }
+    return departments;
 }
 
 // Check to see if the product the user chose exists in the inventory
